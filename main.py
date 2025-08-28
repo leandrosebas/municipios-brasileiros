@@ -30,18 +30,19 @@ def formatar_moeda(valor):
         return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 @st.cache_data(ttl=10)
-def carregar_dados():
+def carregar_dados_hoje(hoje_str):
     with get_conexao() as conexao:
-        query = """
+        query = f"""
             SELECT Emissao, VENDEDOR, ValorNF
             FROM dbo.v_faturamento_produto
+            WHERE CAST(Emissao AS DATE) = '{hoje_str}'
         """
         return pd.read_sql(query, conexao)
 
 @st.cache_data(ttl=10)
-def carregar_devolucoes():
+def carregar_devolucoes_hoje(hoje_str):
     with get_conexao() as conexao:
-        query = """
+        query = f"""
             SELECT 
                 [QUANTIDADE],
                 [VALOR_TOTAL],
@@ -50,29 +51,27 @@ def carregar_devolucoes():
                 [COD_VENDEDOR],
                 [NOME_VENDEDOR]
             FROM dbo.v_devolucoes
+            WHERE CAST(EMISSAO_NFD AS DATE) = '{hoje_str}'
         """
         df = pd.read_sql(query, conexao)
-    df['EMISSAO_NFD'] = pd.to_datetime(df['EMISSAO_NFD'], errors='coerce')
     return df
 
 def main():
     st.set_page_config(page_title="Informações de Faturamento do Dia", layout="wide")
     hoje = date.today()
+    hoje_str = hoje.strftime('%Y-%m-%d') # Formato para a query SQL
 
     st.title(f"Informações de Faturamento do Dia ({hoje.strftime('%d/%m/%Y')} - {hoje.strftime('%A')})")
     
     st_autorefresh(interval=10000, key="datarefresh")
 
     # --- Faturamento e Devoluções do dia ---
-    df_vendas = carregar_dados()
-    df_vendas['Emissao'] = pd.to_datetime(df_vendas['Emissao'])
-    vendas_hoje = df_vendas[df_vendas['Emissao'].dt.date == hoje]
+    # Agora chamamos as funções otimizadas, passando a data como argumento
+    df_vendas = carregar_dados_hoje(hoje_str)
+    df_devolucoes = carregar_devolucoes_hoje(hoje_str)
 
-    df_devolucoes = carregar_devolucoes()
-    devolucoes_hoje = df_devolucoes[df_devolucoes['EMISSAO_NFD'].dt.date == hoje]
-
-    total_vendas = vendas_hoje['ValorNF'].sum()
-    total_devolucoes = devolucoes_hoje['VALOR_TOTAL'].sum()
+    total_vendas = df_vendas['ValorNF'].sum()
+    total_devolucoes = df_devolucoes['VALOR_TOTAL'].sum()
     faturamento_liquido = total_vendas - total_devolucoes
 
     # --- Cartões no topo ---
@@ -83,12 +82,12 @@ def main():
 
     # --- Receita, Devolução e Faturamento por Vendedor ---
     vendas_vendedor = (
-        vendas_hoje.groupby('VENDEDOR', as_index=False)['ValorNF']
+        df_vendas.groupby('VENDEDOR', as_index=False)['ValorNF']
         .sum()
         .rename(columns={'ValorNF': 'Receita'})
     )
     devolucao_vendedor = (
-        devolucoes_hoje.groupby('NOME_VENDEDOR', as_index=False)['VALOR_TOTAL']
+        df_devolucoes.groupby('NOME_VENDEDOR', as_index=False)['VALOR_TOTAL']
         .sum()
         .rename(columns={'VALOR_TOTAL': 'Devolução'})
     )
@@ -130,3 +129,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#---- Otimização de consultas e correção de segredos-----
