@@ -11,13 +11,15 @@ try:
 except:
     locale.setlocale(locale.LC_ALL, '')
 
+@st.cache_resource
 def get_conexao():
+    # Acessando as credenciais de forma segura através dos segredos do Streamlit
     conexao_dados = (
-        "Driver={SQL Server};"
-        "Server=10.237.3.237;"
-        "Database=Relatorios;"
-        "UID=merito_rel;"
-        "PWD=p@ssw0rd"
+        "Driver=" + st.secrets["conexao_banco_dados"]["Driver"] + ";"
+        "Server=" + st.secrets["conexao_banco_dados"]["Server"] + ";"
+        "Database=" + st.secrets["conexao_banco_dados"]["Database"] + ";"
+        "UID=" + st.secrets["conexao_banco_dados"]["UID"] + ";"
+        "PWD=" + st.secrets["conexao_banco_dados"]["PWD"]
     )
     return pyodbc.connect(conexao_dados)
 
@@ -119,11 +121,11 @@ def main():
     col_vazia_esq, col_tabela, col_vazia_dir = st.columns([1, 2, 1])
 
     with col_tabela:
-     st.subheader("Receita, Devolução e Faturamento por Vendedor")
-     st.dataframe(
-        tabela_vendedor.style.set_properties(**{'width': 'auto'}),
-        use_container_width=True  # Alterado de False para True
-    )
+        st.subheader("Receita, Devolução e Faturamento por Vendedor")
+        st.dataframe(
+            tabela_vendedor.style.set_properties(**{'width': 'auto'}),
+            use_container_width=True
+        )
 # --- Fim do novo trecho ---
 
 if __name__ == "__main__":
